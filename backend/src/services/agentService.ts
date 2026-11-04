@@ -1,15 +1,8 @@
 import { askCodingModel } from "./llmClient.js";
 import { executeJava } from "./javaRunner.js";
+import type{AgentResponse} from "../types.js";
 
-const MAX_ATTEMPTS = 3;
-
-interface AgentResponse {
-  status: "fixed" | "failed";
-  code: string;
-  explanation: string;
-  attempts: number;
-  execution: Awaited<ReturnType<typeof executeJava>>;
-}
+const maxAttempts = Number(process.env.MAX_ATTEMPTS) ?? 3;
 
 function extractJson(text: string): { code: string; explanation: string } {
   const fenced = text.match(/```json\s*([\s\S]*?)```/i);
@@ -37,9 +30,7 @@ function extractJson(text: string): { code: string; explanation: string } {
 }
 
 
-
-//
-export async function fixJavaCode(initialCode: string, input = ""): Promise<AgentResponse> {
+export async function fixJavaCode(initialCode: string, input = ""): Promise<AgentResponse<ReturnType<typeof executeJava>>> {
   let code = initialCode;
   let execution = await executeJava(code, input);
 
@@ -49,13 +40,13 @@ export async function fixJavaCode(initialCode: string, input = ""): Promise<Agen
       code,
       explanation: "Code already executes successfully.",
       attempts: 0,
-      execution
+      executionOP:execution
     };
   }
 
   let explanation = "";
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const result = await askCodingModel([
       {
         role: "system",
@@ -71,7 +62,7 @@ export async function fixJavaCode(initialCode: string, input = ""): Promise<Agen
       {
         role: "user",
         content: [
-          `Attempt: ${attempt}/${MAX_ATTEMPTS}`,
+          `Attempt: ${attempt}/${maxAttempts}`,
           "Current Java code:",
           code,
           "Execution status:",
@@ -97,7 +88,7 @@ export async function fixJavaCode(initialCode: string, input = ""): Promise<Agen
         code,
         explanation,
         attempts: attempt,
-        execution
+        executionOP:execution
       };
     }
   }
@@ -106,7 +97,7 @@ export async function fixJavaCode(initialCode: string, input = ""): Promise<Agen
     status: "failed",
     code,
     explanation: explanation || "The agent could not produce a working program within the retry limit.",
-    attempts: MAX_ATTEMPTS,
-    execution
+    attempts: maxAttempts,
+    executionOP:execution
   };
 }

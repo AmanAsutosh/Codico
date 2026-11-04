@@ -3,67 +3,28 @@ import path from "node:path";
 import os from "node:os";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import {ProcessResult} from "../types.js";
+import {ExecutionResult} from "../types.js";
 
-const RUNNER_IMAGE =
-    process.env.JAVA_RUNNER_IMAGE ?? "codico-java-runner:21";
+const RUNNER_IMAGE = process.env.JAVA_RUNNER_IMAGE ?? "codico-java-runner:21";
 
-const EXECUTION_TIMEOUT_MS = Number(
-    process.env.JAVA_EXECUTION_TIMEOUT_MS ?? 5000
-);
+const EXECUTION_TIMEOUT_MS = Number(process.env.JAVA_EXECUTION_TIMEOUT_MS ?? 5000);
 
-const MAX_OUTPUT_BYTES = Number(
-    process.env.JAVA_MAX_OUTPUT_BYTES ?? 64 * 1024
-);
+const MAX_OUTPUT_BYTES = Number(process.env.JAVA_MAX_OUTPUT_BYTES ?? 64 * 1024);
 
-const MEMORY_LIMIT =
-    process.env.JAVA_MEMORY_LIMIT ?? "128m";
+const MEMORY_LIMIT = process.env.JAVA_MEMORY_LIMIT ?? "128m";
 
-const CPU_LIMIT =
-    process.env.JAVA_CPU_LIMIT ?? "0.5";
+const CPU_LIMIT =process.env.JAVA_CPU_LIMIT ?? "0.5";
 
-const PIDS_LIMIT = Number(
-    process.env.JAVA_PIDS_LIMIT ?? 32
-);
+const PIDS_LIMIT = Number(process.env.JAVA_PIDS_LIMIT ?? 32);
 
-/*
- * Optional named Docker volume shared between the backend
- * and Java execution containers.
- *
- * Set JAVA_WORKSPACE_VOLUME when running the backend in Docker.
- */
+
 const WORKSPACE_VOLUME = process.env.JAVA_WORKSPACE_VOLUME;
 
-/*
- * Backend-side workspace directory.
- *
- * When running in Docker, mount the shared volume here.
- */
-const WORKSPACE_DIR =
-    process.env.JAVA_WORKSPACE_DIR ??
-    path.join(os.tmpdir(), "codico-workspaces");
 
-export interface ExecutionResult {
-    output: string;
-    error: string;
-    exitCode: number | null;
-    timedOut: boolean;
-    outputLimitExceeded: boolean;
-}
+const WORKSPACE_DIR = process.env.JAVA_WORKSPACE_DIR ?? path.join(os.tmpdir(), "codico-workspaces");
 
-interface ProcessResult {
-    stdout: string;
-    stderr: string;
-    exitCode: number | null;
-    timedOut: boolean;
-    outputLimitExceeded: boolean;
-}
-
-function runDocker(
-    args: string[],
-    timeoutMs: number,
-    maxOutputBytes: number,
-    containerName: string
-): Promise<ProcessResult> {
+function runDocker(args: string[],timeoutMs: number,maxOutputBytes: number,containerName: string): Promise<ProcessResult> {
     return new Promise((resolve, reject) => {
         const child = spawn("docker", args, {
             stdio: ["ignore", "pipe", "pipe"],
@@ -96,15 +57,8 @@ function runDocker(
             child.kill("SIGTERM");
         }, timeoutMs);
 
-        const appendOutput = (
-            current: string,
-            chunk: Buffer,
-            isStdout: boolean
-        ) => {
-            const remaining = Math.max(
-                0,
-                maxOutputBytes - outputBytes
-            );
+        const appendOutput = (current: string,chunk: Buffer,isStdout: boolean) => {
+            const remaining = Math.max( 0, maxOutputBytes - outputBytes);
 
             const accepted = chunk.subarray(0, remaining);
 
@@ -248,6 +202,7 @@ const containerWorkDir = "/workspace";
 
         if (result.timedOut) {
             return {
+                status:"timeout",
                 output: result.stdout,
                 error: "Execution timed out.",
                 exitCode: result.exitCode,
@@ -258,6 +213,7 @@ const containerWorkDir = "/workspace";
 
         if (result.outputLimitExceeded) {
             return {
+                status:"system_error",
                 output: result.stdout,
                 error: "Output limit exceeded.",
                 exitCode: result.exitCode,
@@ -267,6 +223,7 @@ const containerWorkDir = "/workspace";
         }
 
         return {
+            status:"success",
             output: result.stdout,
             error: result.stderr,
             exitCode: result.exitCode,
@@ -275,19 +232,14 @@ const containerWorkDir = "/workspace";
         };
     } catch (error) {
         return {
+            status:"runtime_error",
             output: "",
-            error:
-                error instanceof Error
-                    ? error.message
-                    : "Java execution failed.",
+            error: error instanceof Error ? error.message : "Java execution failed.",
             exitCode: null,
             timedOut: false,
             outputLimitExceeded: false,
         };
     } finally {
-        await fs.rm(workDir, {
-            recursive: true,
-            force: true,
-        });
+        await fs.rm(workDir, {  recursive: true,  force: true,});
     }
 }

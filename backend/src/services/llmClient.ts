@@ -1,15 +1,9 @@
-interface ChatMessage {
-  role: "system" | "user";
-  content: string;
-}
+import type{ChatMessage} from "../types.js"
+import type{LlmResponse} from "../types.js"
 
-interface LlmResponse {
-  content: string;
-}
-
-const baseUrl = (process.env.LLM_BASE_URL ?? "http://localhost:11434/v1").replace(/\/$/, "");
-const model = process.env.LLM_MODEL ?? "qwen2.5-coder:7b";
-const apiKey = process.env.LLM_API_KEY ?? "ollama";
+const baseUrl = process.env.LLM_BASE_URL 
+const model = process.env.LLM_MODEL 
+const apiKey = process.env.LLM_API_KEY 
 
 export async function askCodingModel(messages: ChatMessage[]): Promise<LlmResponse> {
   const response = await fetch(`${baseUrl}/chat/completions`, {
