@@ -1,32 +1,35 @@
-import axios from "axios";
+import type {ExecutionResult,AgentResponse} from "../types";
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:5000/api",
-  timeout: 30_000,
-});
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-export interface RunResult {
-  success: boolean;
-  status: string;
-  output: string;
-  error: string;
-  durationMs: number;
-}
-
-export interface AgentResult extends RunResult {
-  code: string;
-  explanation: string;
-  attempts: number;
-}
-
-export async function runCode(code: string, input: string): Promise<RunResult> {
-  const { data } = await api.post<RunResult>("/run", { code, input });
-  return data;
-}
-
-export async function fixCode(code: string, input: string): Promise<AgentResult> {
-  const { data } = await api.post<AgentResult>("/agent/fix", { code, input }, {
-    timeout: 120_000,
+export async function runCode(code: string,input: string): Promise<ExecutionResult> {
+  const response = await fetch(`${API_URL}/api/run`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ code, input }),
   });
-  return data;
+
+  if (!response.ok) {
+    throw new Error(`Execution request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function fixCode(code: string,input: string): Promise<AgentResponse> {
+  const response = await fetch(`${API_URL}/api/agent/fix`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ code, input }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI request failed: ${response.status}`);
+  }
+
+  return response.json();
 }
